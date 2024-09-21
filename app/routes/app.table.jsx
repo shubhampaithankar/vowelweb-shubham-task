@@ -1,7 +1,9 @@
 import { json } from '@remix-run/node'
-import { Page, Layout, Card, DataTable, Button } from '@shopify/polaris'
+import { useCallback, useMemo, useState } from 'react'
+import { Page, Layout, Card, DataTable, Button, Toast } from '@shopify/polaris'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
+import { useModal } from '../hooks/useModal'
 
 // inital popupulate data // get data from graphql
 export const loader = async ({ request }) => {
@@ -60,7 +62,7 @@ export const action = async ({ request }) => {
           }
         )
         
-        return json({ success: true })
+        return json({ success: true, actionType })
     }
 
     if (actionType === 'create') {
@@ -100,7 +102,7 @@ export const action = async ({ request }) => {
             },
         )
         
-        return json({ success: true })
+        return json({ success: true, actionType })
     }
 
     if (actionType === 'edit') {
@@ -130,7 +132,7 @@ export const action = async ({ request }) => {
 
             },
             })
-            return json({ success: true })
+            return json({ success: true, actionType })
     }
 
     return json({ error: "Unsupported action" })
@@ -138,11 +140,36 @@ export const action = async ({ request }) => {
 
 export default function TablePage() {
     const { state, Form: FetcherForm, submit } = useFetcher()
+    const loading = state === 'loading'
+
     const { products } = useLoaderData()
 
-    console.log(products)
-    
-    const loading = state === 'loading'
+    const [title, setTitle] = useState('')
+
+    const initialProduct = useMemo(() => ({
+        id: '',
+        title: '',
+        description: '',
+        price: '',
+        vendor: '',
+    }), [])
+
+    const { ModalDialog, onOpen } = useModal(initialProduct)
+
+    const addProduct = useCallback(() => {
+        onOpen(initialProduct)
+        setTitle('add')
+    }, [onOpen, initialProduct])
+
+    const editProduct = useCallback((product) => {
+        onOpen(product)
+        setTitle('edit')
+    }, [onOpen])
+
+    const deleteProduct = useCallback((product) => {
+        onOpen(product)
+        setTitle('delete')
+    }, [onOpen])
 
     const rows = products.map((product) => [
         product.title,
@@ -153,37 +180,9 @@ export default function TablePage() {
         <FetcherForm method="post" key={product.id}>
             <input type="hidden" name="productId" value={product.id} />
             <Button type="submit" name="_action" value="edit" onClick={() => editProduct(product)} disabled={loading}>Edit</Button>
-            <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product.id)} disabled={loading}>Delete</Button>
+            <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product)} disabled={loading}>Delete</Button>
         </FetcherForm>
     ])
-
-    const addProduct = () => {
-        submit({
-            _action: 'create',
-            title: 'New Product',
-            description: 'New Product description',
-            vendor: 'New Vendor',
-            price: `${Math.random() * 100}`
-        }, { method: 'post' })
-    }
-
-    const editProduct = async (product) => {
-        submit({
-            _action: 'edit',
-            productId: product.id,
-            title: 'Edit Product',
-            description: 'Edit Desccription',
-            price: `${Math.random() * 100 + 10}`,
-            vendor: 'Edit Vendor',
-        }, { method: 'put' })
-    }
-
-    const deleteProduct = async (productId) => {
-        submit({
-            _action: 'delete',
-            productId,
-        }, { method: 'delete' })
-    }
 
     return (
         <Page title="Table Page">
@@ -199,6 +198,7 @@ export default function TablePage() {
                 </Card>
                 </Layout.Section>
             </Layout>
+            <ModalDialog submit={submit} title={title}/>
         </Page>
     )
 }

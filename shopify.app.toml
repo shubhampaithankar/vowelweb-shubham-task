@@ -3,7 +3,7 @@
 client_id = "0cdf32aa98efd4f394ef6b79879eb917"
 name = "vowelweb-shubham-task"
 handle = "vowelweb-shubham-task"
-application_url = "https://individually-visitor-phentermine-invitation.trycloudflare.com"
+application_url = "https://ca-latex-donate-lights.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://individually-visitor-phentermine-invitation.trycloudflare.com/auth/callback",
-  "https://individually-visitor-phentermine-invitation.trycloudflare.com/auth/shopify/callback",
-  "https://individually-visitor-phentermine-invitation.trycloudflare.com/api/auth/callback"
+  "https://ca-latex-donate-lights.trycloudflare.com/auth/callback",
+  "https://ca-latex-donate-lights.trycloudflare.com/auth/shopify/callback",
+  "https://ca-latex-donate-lights.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]
