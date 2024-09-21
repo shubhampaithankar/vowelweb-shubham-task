@@ -3,7 +3,7 @@
 client_id = "0cdf32aa98efd4f394ef6b79879eb917"
 name = "vowelweb-shubham-task"
 handle = "vowelweb-shubham-task"
-application_url = "https://rich-peru-emission-flush.trycloudflare.com"
+application_url = "https://scientific-ll-ruby-highest.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://rich-peru-emission-flush.trycloudflare.com/auth/callback",
-  "https://rich-peru-emission-flush.trycloudflare.com/auth/shopify/callback",
-  "https://rich-peru-emission-flush.trycloudflare.com/api/auth/callback"
+  "https://scientific-ll-ruby-highest.trycloudflare.com/auth/callback",
+  "https://scientific-ll-ruby-highest.trycloudflare.com/auth/shopify/callback",
+  "https://scientific-ll-ruby-highest.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]
