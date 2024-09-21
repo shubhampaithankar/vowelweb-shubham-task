@@ -1,9 +1,8 @@
 import { json } from '@remix-run/node'
-import { useCallback, useMemo, useState } from 'react'
-import { Page, Layout, Card, DataTable, Button, Toast } from '@shopify/polaris'
+import { useCallback, useState } from 'react'
+import { Page, Layout, Card, DataTable, Button, Toast, Modal, Form, FormLayout, TextField } from '@shopify/polaris'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
-import { useModal } from '../hooks/useModal'
 
 // inital popupulate data // get data from graphql
 export const loader = async ({ request }) => {
@@ -145,31 +144,74 @@ export default function TablePage() {
     const { products } = useLoaderData()
 
     const [title, setTitle] = useState('')
-
-    const initialProduct = useMemo(() => ({
+    const [isOpen, setIsOpen] = useState(false);
+    const [currentProduct, setCurrentProduct] = useState({
         id: '',
         title: '',
         description: '',
         price: '',
         vendor: '',
-    }), [])
-
-    const { ModalDialog, onOpen } = useModal(initialProduct)
+    });
 
     const addProduct = useCallback(() => {
-        onOpen(initialProduct)
+        setIsOpen(true)
         setTitle('add')
-    }, [onOpen, initialProduct])
+    }, [])
 
-    const editProduct = useCallback((product) => {
-        onOpen(product)
+    const editProduct = useCallback(() => {
+        setIsOpen(true)
         setTitle('edit')
-    }, [onOpen])
+    }, [])
 
-    const deleteProduct = useCallback((product) => {
-        onOpen(product)
+    const deleteProduct = useCallback(() => {
+        setIsOpen(true)
         setTitle('delete')
-    }, [onOpen])
+    }, [])
+
+    const onClose = useCallback(() => {
+        setCurrentProduct({
+            id: '',
+            title: '',
+            description: '',
+            price: '',
+            vendor: '',
+        });
+        setIsOpen(false);
+    }, [])
+
+    const handleChange = useCallback((value, key) => setCurrentProduct({ ...currentProduct, [key]: value }), [currentProduct])
+
+    const handleAction = () => {
+        try {
+            switch (title) {
+                case 'add':
+                    submit({
+                        _action: 'create',
+                        ...currentProduct
+                    }, { method: 'post' });
+                    break;
+                case 'edit':
+                    submit({
+                        _action: 'edit',
+                        productId: currentProduct.id,
+                        ...currentProduct
+                    }, { method: 'put' });
+                    break;
+                case 'delete':
+                    submit({
+                        _action: 'delete',
+                        productId: currentProduct.id,
+                    }, { method: 'delete' });
+                    break;
+                default:
+                    break;
+            }
+        } catch (error) {
+            console.log(error);
+        } finally {
+            onClose();
+        }
+    };
 
     const rows = products.map((product) => [
         product.title,
@@ -198,7 +240,23 @@ export default function TablePage() {
                 </Card>
                 </Layout.Section>
             </Layout>
-            <ModalDialog submit={submit} title={title}/>
+            <Modal
+                open={isOpen}
+                onClose={onClose} 
+                title={title}
+                primaryAction={{ content: 'Submit', onAction: handleAction }}
+            >
+                <Modal.Section>
+                    <FormLayout>
+                        <Form onSubmit={submit}>
+                            <TextField label="Title" name="title" value={currentProduct.title} disabled={loading} onChange={(event) => handleChange(event, 'title')} />
+                            <TextField label="Description" name="description" value={currentProduct.description} disabled={loading} onChange={(event) => handleChange(event, 'description')}/>
+                            <TextField label="Price" type="number" name="price" value={currentProduct.price} disabled={loading} onChange={(event) => handleChange(event, 'price')} />
+                            <TextField label="Vendor" name="vendor" value={currentProduct.vendor} disabled={loading} onChange={(event) => handleChange(event, 'vendor')} />
+                        </Form>
+                    </FormLayout>
+                </Modal.Section>    
+            </Modal>
         </Page>
     )
 }
