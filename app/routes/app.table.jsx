@@ -38,12 +38,45 @@ export const loader = async ({ request }) => {
     const products = responseJson.data.products.edges.map((edge) => edge.node)
     return json({ products })
 }
+// create, edit, delete products // post, put, delete products
+export const action = async ({ request }) => {
+    const { admin } = await authenticate.admin(request)
+    const formData = await request.formData()
+    const actionType = formData.get('_action')
+
+    if (actionType === 'delete') {
+        const productId = formData.get('productId');
+        await admin.graphql(`
+          mutation DeleteProduct($input: ProductDeleteInput!) {
+            productDelete(input: $input) {
+              deletedProductId
+            }
+          }`,
+          {
+            variables: {
+              input: { id: productId },
+            },
+          }
+        )
+        
+        return json({ success: true })
+    }
+
+    return json({ error: "Unsupported action" })
+}
 
 export default function TablePage() {
   const { products } = useLoaderData()
   const fetcher = useFetcher()
 
   console.log('products', products)
+
+  const deleteProduct = async (productId) => {
+    fetcher.submit({
+        _action: 'delete',
+        productId,
+      }, { method: 'delete' })
+  }
 
   const rows = products.map((product) => [
     product.title,
@@ -52,6 +85,8 @@ export default function TablePage() {
     `$${product.variants[0]?.price || 0}`,
     product.vendor,
     <fetcher.Form method="post" key={product.id}>
+      <input type="hidden" name="productId" value={product.id} />
+      <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product.id)}>Delete</Button>
     </fetcher.Form>
   ])
 
