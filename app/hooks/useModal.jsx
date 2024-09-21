@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal, TextField, FormLayout, Form } from "@shopify/polaris";
 
-export const useModal = (initialProduct = {}, modalData) => {
+export const useModal = (initialProduct, modalData) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState({
     title: initialProduct.title || '',
@@ -28,7 +28,7 @@ export const useModal = (initialProduct = {}, modalData) => {
         open={isOpen}
         onClose={onClose}
         title={modalData.title}
-        primaryAction={modalData.action}
+        primaryAction={modalData.primaryAction}
       >
         <Modal.Section>
           <Form onSubmit={(e) => e.preventDefault()}>
@@ -63,6 +63,7 @@ export const useModal = (initialProduct = {}, modalData) => {
 
   return {
     ModalDialog,
-    isOpen
+    isOpen,
+    onClose,
   };
 };
