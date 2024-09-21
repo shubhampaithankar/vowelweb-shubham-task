@@ -3,7 +3,7 @@
 client_id = "0cdf32aa98efd4f394ef6b79879eb917"
 name = "vowelweb-shubham-task"
 handle = "vowelweb-shubham-task"
-application_url = "https://cinema-trivia-franchise-fusion.trycloudflare.com"
+application_url = "https://rich-peru-emission-flush.trycloudflare.com"
 embedded = true
 
 [build]
@@ -13,13 +13,13 @@ include_config_on_deploy = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = ["write_products", "read_products"]
+scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://cinema-trivia-franchise-fusion.trycloudflare.com/auth/callback",
-  "https://cinema-trivia-franchise-fusion.trycloudflare.com/auth/shopify/callback",
-  "https://cinema-trivia-franchise-fusion.trycloudflare.com/api/auth/callback"
+  "https://rich-peru-emission-flush.trycloudflare.com/auth/callback",
+  "https://rich-peru-emission-flush.trycloudflare.com/auth/shopify/callback",
+  "https://rich-peru-emission-flush.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]
