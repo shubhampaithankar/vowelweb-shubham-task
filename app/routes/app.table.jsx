@@ -1,5 +1,5 @@
 import { json } from '@remix-run/node'
-import { Page, Layout, Card, DataTable, Button, Modal } from '@shopify/polaris'
+import { Page, Layout, Card, DataTable, Button } from '@shopify/polaris'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
 
@@ -47,6 +47,7 @@ export const action = async ({ request }) => {
     if (actionType === 'delete') {
         const productId = formData.get('productId');
         await admin.graphql(`
+        #graphql
           mutation DeleteProduct($input: ProductDeleteInput!) {
             productDelete(input: $input) {
               deletedProductId
@@ -62,47 +63,142 @@ export const action = async ({ request }) => {
         return json({ success: true })
     }
 
+    if (actionType === 'create') {
+        const title = formData.get('title');
+        const description = formData.get('description');
+        const price = formData.get('price');
+        const vendor = formData.get('vendor');
+
+        await admin.graphql(`
+        #graphql
+            mutation populateProduct($input: ProductInput!) {
+                productCreate(input: $input) {
+                    product {
+                        id
+                        description,
+                        vendor,
+                        title,
+                        variants(first: 10) {
+                            edges {
+                                node {
+                                    price
+                                }
+                            }
+                        }
+                    }
+                }
+            }`,
+            {
+                variables: {
+                    input: {
+                        title,
+                        vendor,
+                    },
+                    // variants: [{ price, description }],
+                    // images: [{ src }],
+                },
+            },
+        )
+        
+        return json({ success: true })
+    }
+
+    if (actionType === 'edit') {
+        const id = formData.get('productId');
+        const title = formData.get('title');
+        const description = formData.get('description');
+        const price = formData.get('price');
+        const vendor = formData.get('vendor');
+
+        await admin.graphql(`
+        #graphql
+            mutation populateProduct($input: ProductInput!) {
+                productUpdate(input: $input) {
+                    product {
+                        id
+                    }
+                }
+            }`,
+            {
+                variables: {
+                    input: {
+                        id,
+                        title,
+                        vendor,
+                    },
+                    variants: [{ price, description }],
+
+            },
+            })
+            return json({ success: true })
+    }
+
     return json({ error: "Unsupported action" })
 }
 
 export default function TablePage() {
-  const { products } = useLoaderData()
-  const fetcher = useFetcher()
+    const { state, Form: FetcherForm, submit } = useFetcher()
+    const { products } = useLoaderData()
 
-  console.log('products', products)
+    console.log(products)
+    
+    const loading = state === 'loading'
 
-  const deleteProduct = async (productId) => {
-    fetcher.submit({
-        _action: 'delete',
-        productId,
-      }, { method: 'delete' })
-  }
+    const rows = products.map((product) => [
+        product.title,
+        product.description,
+        <img src={product.images?.[0]?.src} alt={product.title} width="50" key={product.id} />,
+        `$${product.variants[0]?.price || 0}`,
+        product.vendor,
+        <FetcherForm method="post" key={product.id}>
+            <input type="hidden" name="productId" value={product.id} />
+            <Button type="submit" name="_action" value="edit" onClick={() => editProduct(product)} disabled={loading}>Edit</Button>
+            <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product.id)} disabled={loading}>Delete</Button>
+        </FetcherForm>
+    ])
 
-  const rows = products.map((product) => [
-    product.title,
-    product.description,
-    <img src={product.images?.[0]?.src} alt={product.title} width="50" key={product.id} />,
-    `$${product.variants[0]?.price || 0}`,
-    product.vendor,
-    <fetcher.Form method="post" key={product.id}>
-      <input type="hidden" name="productId" value={product.id} />
-      <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product.id)}>Delete</Button>
-    </fetcher.Form>
-  ])
+    const addProduct = () => {
+        submit({
+            _action: 'create',
+            title: 'New Product',
+            description: 'New Product description',
+            vendor: 'New Vendor',
+            price: `${Math.random() * 100}`
+        }, { method: 'post' })
+    }
 
-  return (
-    <Page title="Table Page">
-      <Layout>
-        <Layout.Section>
-          <Card>
-            <DataTable
-              columnContentTypes={['text', 'text', 'text', 'numeric', 'text', 'text']}
-              headings={['Title', 'Description', 'Image', 'Price', 'Vendor', 'Actions']}
-              rows={rows}
-            />
-          </Card>
-        </Layout.Section>
-      </Layout>
-    </Page>
-  )
+    const editProduct = async (product) => {
+        submit({
+            _action: 'edit',
+            productId: product.id,
+            title: 'Edit Product',
+            description: 'Edit Desccription',
+            price: `${Math.random() * 100 + 10}`,
+            vendor: 'Edit Vendor',
+        }, { method: 'put' })
+    }
+
+    const deleteProduct = async (productId) => {
+        submit({
+            _action: 'delete',
+            productId,
+        }, { method: 'delete' })
+    }
+
+    return (
+        <Page title="Table Page">
+            <Layout>
+                <Layout.Section>
+                <Card>
+                    <Button primary onClick={addProduct} disabled={loading}>Add new product</Button>
+                    <DataTable
+                        columnContentTypes={['text', 'text', 'text', 'numeric', 'text', 'text']}
+                        headings={['Title', 'Description', 'Image', 'Price', 'Vendor', 'Actions']}
+                        rows={rows}
+                    />
+                </Card>
+                </Layout.Section>
+            </Layout>
+        </Page>
+    )
 }
