@@ -1,6 +1,6 @@
 import { json } from '@remix-run/node'
-import { useCallback, useState } from 'react'
-import { Page, Layout, Card, DataTable, Button, Toast, Modal, Form, FormLayout, TextField } from '@shopify/polaris'
+import { useCallback, useEffect, useState } from 'react'
+import { Page, Layout, Card, DataTable, Button, BlockStack, Modal, Form, FormLayout, TextField, DropZone, Thumbnail, Banner, List, Text } from '@shopify/polaris'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
 
@@ -23,11 +23,15 @@ export const loader = async ({ request }) => {
                     }
                 }
               }
-              images(first: 1) {
+              media(first: 1) {
                 edges {
-                  node {
-                    src
-                  }
+                    node {
+                        alt
+                        mediaContentType
+                        preview {
+                            status
+                        }
+                    }
                 }
               }
             }
@@ -69,17 +73,108 @@ export const action = async ({ request }) => {
         const description = formData.get('description');
         const price = formData.get('price');
         const vendor = formData.get('vendor');
+        const image = formData.get('image');
 
-        await admin.graphql(`
-        #graphql
-            mutation populateProduct($input: ProductInput!) {
+        const createProduct = await admin.graphql(
+        `
+            mutation productCreate($input: ProductInput!) {
                 productCreate(input: $input) {
                     product {
                         id
-                        description,
-                        vendor,
-                        title,
-                        variants(first: 10) {
+                        title
+                        descriptionHtml
+                        vendor
+                        productType
+                        variants (first: 1) {
+                            edges {
+                                node {
+                                    id
+                                    price
+                                    # sku
+                                }
+                            }
+                        }
+                    }
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }
+        `,
+        {
+            variables: {
+                input: {
+                    title,
+                    vendor,
+                    descriptionHtml: description,
+                    productType: 'VendorProduct',
+                    variants: [
+                        {
+                            price: parseFloat(price),
+                        }
+                    ],
+                }
+            },
+            apiVersion: '2024-01'
+        });
+        const createdProductJson = await createProduct.json();
+
+        await admin.graphql(
+        `
+            mutation AddMediaToProduct($media: [CreateMediaInput!]!, $productId: ID!) {
+                productCreateMedia(media: $media, productId: $productId) {
+                    media {
+                        id
+                        alt
+                        mediaContentType
+                        preview {
+                            status
+                        }
+                    }
+                    mediaUserErrors {
+                        field
+                        message
+                    }
+                    product {
+                        id
+                    }
+                }
+            }
+        `,
+            {
+                variables: {
+                    media: [
+                        {
+                            originalSource: image,
+                            alt: `${title}-image`,
+                            mediaContentType: "IMAGE"
+                        },
+                    ],
+                    productId: createdProductJson.data.productCreate.product.id
+                }
+            }
+        )
+        return json({ success: true, actionType });
+    }
+    
+    if (actionType === 'edit') {
+        const id = formData.get('id');
+        const title = formData.get('title');
+        const description = formData.get('description');
+        const vendor = formData.get('vendor');
+        const price = formData.get('price');
+        const image = formData.get('image')
+    
+        await admin.graphql(`
+            mutation updateProduct($input: ProductInput!) {
+                productUpdate(input: $input) {
+                    product {
+                        id
+                        title
+                        vendor
+                        descriptionHtml
+                        variants(first: 1) {
                             edges {
                                 node {
                                     price
@@ -87,53 +182,80 @@ export const action = async ({ request }) => {
                             }
                         }
                     }
-                }
-            }`,
-            {
-                variables: {
-                    input: {
-                        title,
-                        vendor,
-                    },
-                    // variants: [{ price, description }],
-                    // images: [{ src }],
-                },
-            },
-        )
-        
-        return json({ success: true, actionType })
-    }
-
-    if (actionType === 'edit') {
-        const id = formData.get('productId');
-        const title = formData.get('title');
-        const description = formData.get('description');
-        const price = formData.get('price');
-        const vendor = formData.get('vendor');
-
-        await admin.graphql(`
-        #graphql
-            mutation populateProduct($input: ProductInput!) {
-                productUpdate(input: $input) {
-                    product {
-                        id
+                    userErrors {
+                        field
+                        message
                     }
                 }
-            }`,
-            {
-                variables: {
-                    input: {
-                        id,
-                        title,
-                        vendor,
-                    },
-                    variants: [{ price, description }],
+            }
+        `,
+        {
+            variables: {
+                input: {
+                    id,
+                    title,
+                    vendor,
+                    descriptionHtml: description,
+                },
+                variants: [
+                    {
+                        price: parseFloat(price),
+                    }
+                ]
+            }
+        })
 
-            },
-            })
-            return json({ success: true, actionType })
+        // update price
+        console.log(`update price`)
+        await admin.graphql(
+        `
+            mutation updateProductVariant($input: ProductVariantInput!) {
+                productVariantUpdate(input: $input) {
+                    productVariant {
+                        price
+                    }
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }
+        `, 
+        {
+            variables: {
+                input: {
+                    price: parseFloat(price),
+                },
+            }
+        })
+
+        // update media
+        console.log(`update media`)
+        // await admin.graphql(
+        // `
+        //     mutation updateProductMedia($media: [UpdateMediaInput!]!, $productId: ID!) {
+        //         productUpdateMedia(media: $media, productId: $productId) {
+        //             media  {
+        //                 alt
+        //             }
+        //         }
+        //     }
+        // `,
+        // {
+        //     variables: {
+        //         media: [
+        //             {
+        //                 // mediaContentType: "IMAGE",
+        //                 alt: image,
+        //             },
+        //         ],
+        //         productId: id
+        //     }
+        // })
+
+        return json({ success: true, actionType });
     }
-
+    
     return json({ error: "Unsupported action" })
 }
 
@@ -152,20 +274,31 @@ export default function TablePage() {
         price: '',
         vendor: '',
     });
+    const [files, setFiles] = useState([])
 
     const addProduct = useCallback(() => {
         setIsOpen(true)
         setTitle('add')
     }, [])
 
-    const editProduct = useCallback(() => {
+    const editProduct = useCallback((product) => {
+        console.log(`product: `, product)
         setIsOpen(true)
         setTitle('edit')
+        setCurrentProduct({
+            id: product.id,
+            title: product.title,
+            description: product.description,
+            price: product.variants.edges[0].node.price,
+            vendor: product.vendor,
+        })
+        setFiles([])
     }, [])
 
-    const deleteProduct = useCallback(() => {
+    const deleteProduct = useCallback((product) => {
         setIsOpen(true)
         setTitle('delete')
+        setCurrentProduct(product)
     }, [])
 
     const onClose = useCallback(() => {
@@ -176,25 +309,34 @@ export default function TablePage() {
             price: '',
             vendor: '',
         });
+        setTitle('')
+        setFiles([])
         setIsOpen(false);
     }, [])
 
-    const handleChange = useCallback((value, key) => setCurrentProduct({ ...currentProduct, [key]: value }), [currentProduct])
+    const handleChange = useCallback((value, key) => {
+        console.log(`value: ${value}, key: ${key}`)
+        setCurrentProduct({ ...currentProduct, [key]: value })
+    }, [currentProduct])
 
     const handleAction = () => {
+        const src = files[0] ? URL.createObjectURL(files[0]) : ''
         try {
+            console.log(files)
             switch (title) {
                 case 'add':
                     submit({
                         _action: 'create',
-                        ...currentProduct
+                        ...currentProduct,
+                        image: files[0] ? src : ''
                     }, { method: 'post' });
                     break;
                 case 'edit':
                     submit({
                         _action: 'edit',
                         productId: currentProduct.id,
-                        ...currentProduct
+                        ...currentProduct,
+                        // image: files[0] ? URL.createObjectURL(files[0]) : currentProduct.media ? currentProduct.image : ''
                     }, { method: 'put' });
                     break;
                 case 'delete':
@@ -210,14 +352,15 @@ export default function TablePage() {
             console.log(error);
         } finally {
             onClose();
+            URL.revokeObjectURL(src)
         }
     };
 
     const rows = products.map((product) => [
         product.title,
         product.description,
-        <img src={product.images?.[0]?.src} alt={product.title} width="50" key={product.id} />,
-        `$${product.variants[0]?.price || 0}`,
+        <img src={product.media?.edges[0]?.src} alt={product.title} width="50" key={product.id} />,
+        `$${product.variants?.edges[0]?.node?.price || 0}`,
         product.vendor,
         <FetcherForm method="post" key={product.id}>
             <input type="hidden" name="productId" value={product.id} />
@@ -225,6 +368,14 @@ export default function TablePage() {
             <Button type="submit" name="_action" value="delete" onClick={() => deleteProduct(product)} disabled={loading}>Delete</Button>
         </FetcherForm>
     ])
+
+    console.log(products)
+
+    useEffect(() => {
+        return () => {
+            files.forEach(file => URL.revokeObjectURL(file));
+        }
+    })
 
     return (
         <Page title="Table Page">
@@ -249,14 +400,71 @@ export default function TablePage() {
                 <Modal.Section>
                     <FormLayout>
                         <Form onSubmit={submit}>
-                            <TextField label="Title" name="title" value={currentProduct.title} disabled={loading} onChange={(event) => handleChange(event, 'title')} />
-                            <TextField label="Description" name="description" value={currentProduct.description} disabled={loading} onChange={(event) => handleChange(event, 'description')}/>
-                            <TextField label="Price" type="number" name="price" value={currentProduct.price} disabled={loading} onChange={(event) => handleChange(event, 'price')} />
-                            <TextField label="Vendor" name="vendor" value={currentProduct.vendor} disabled={loading} onChange={(event) => handleChange(event, 'vendor')} />
+                            <TextField label="Title" name="title" value={currentProduct.title} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'title')} />
+                            <TextField label="Description" name="description" value={currentProduct.description} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'description')}/>
+                            <TextField label="Price" type="number" name="price" value={currentProduct.price} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'price')} />
+                            <TextField label="Vendor" name="vendor" value={currentProduct.vendor} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'vendor')} />
+                            <DropZoneWithImageFileUpload files={files} setFiles={setFiles} disabled={title === 'delete'}/>
                         </Form>
                     </FormLayout>
                 </Modal.Section>    
             </Modal>
         </Page>
     )
+}
+
+function DropZoneWithImageFileUpload({ files, setFiles, disabled }) {
+    const [rejectedFiles, setRejectedFiles] = useState([]);
+    const hasError = rejectedFiles.length > 0;
+  
+    const handleDrop = useCallback(
+      (_droppedFiles, acceptedFiles, rejectedFiles) => {
+        setFiles((files) => [...files, ...acceptedFiles]);
+        setRejectedFiles(rejectedFiles);
+      },
+      [],
+    );
+  
+    const fileUpload = !files.length && <DropZone.FileUpload />;
+    const uploadedFiles = files.length > 0 && (
+      <BlockStack vertical>
+        {files.map((file, index) => (
+          <BlockStack alignment="center" key={index}>
+            <Thumbnail
+              size="small"
+              alt={file.name}
+              source={window.URL.createObjectURL(file)}
+            />
+            <div>
+              {file.name}{' '}
+              <Text variant="bodySm" as="p">
+                {file.size} bytes
+              </Text>
+            </div>
+          </BlockStack>
+        ))}
+      </BlockStack>
+    );
+  
+    const errorMessage = hasError && (
+      <Banner title="The following images couldn’t be uploaded:" tone="critical">
+        <List type="bullet">
+          {rejectedFiles.map((file, index) => (
+            <List.Item key={index}>
+              {`"${file.name}" is not supported. File type must be .gif, .jpg, .png or .svg.`}
+            </List.Item>
+          ))}
+        </List>
+      </Banner>
+    );
+  
+    return (
+      <BlockStack vertical={true}>
+        {errorMessage}
+        <DropZone accept="image/*" type="image" onDrop={handleDrop} disabled={disabled} label="Images">
+          {uploadedFiles}
+          {fileUpload}
+        </DropZone>
+      </BlockStack>
+    );
 }
