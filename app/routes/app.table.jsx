@@ -55,7 +55,7 @@ export const action = async ({ request }) => {
     const actionType = formData.get('_action')
 
     if (actionType === 'delete') {
-        const productId = formData.get('productId');
+        const productId = formData.get('productId')
         await admin.graphql(`
         #graphql
           mutation DeleteProduct($input: ProductDeleteInput!) {
@@ -74,138 +74,72 @@ export const action = async ({ request }) => {
     }
 
     if (actionType === 'create') {
-        const title = formData.get('title');
-        const description = formData.get('description');
-        const price = formData.get('price');
-        const vendor = formData.get('vendor');
-        const image = formData.get('image');
+        const title = formData.get('title')
+        const description = formData.get('description')
+        const price = formData.get('price')
+        const vendor = formData.get('vendor')
+        const image = formData.get('image')
 
-        const createProduct = await admin.graphql(
-        `
-            mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
-                productCreate(input: $input, media: $media) {
-                    product {
-                        id
-                        title
-                        descriptionHtml
-                        vendor
-                        productType
-                        variants (first: 1) {
-                            edges {
-                                node {
-                                    id
-                                    price
-                                    # sku
-                                }
-                            }
-                        }
-                        media(first: 1) {
-                            edges {
-                                node {
-                                    id
-                                    alt
-                                    mediaContentType
-                                    # originalSource
-                                }
-                            }
-                        }
+        const createProductWithNewMedia = await admin.graphql(`
+        #graphql
+            mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
+              productCreate(input: $input, media: $media) {
+                product {
+                  id
+                  title
+                  media(first: 10) {
+                    nodes {
+                      alt
+                      mediaContentType
+                      preview {
+                        status
+                      }
                     }
-                    userErrors {
-                        field
-                        message
-                    }
+                  }
                 }
-            }
-        `,
-        {
-            variables: {
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }`,
+            {
+              variables: {
                 input: {
-                    title,
-                    vendor,
-                    descriptionHtml: description,
-                    productType: 'VendorProduct',
-                    variants: [
-                        {
-                            price: parseFloat(price),
-                        }
-                    ],
+                  title,
+                  descriptionHtml: description,
+                  vendor,
                 },
                 media: [
-                    {
-                        alt: 'image',
-                        mediaContentType: 'IMAGE',
-                        // originalSource: image,
-                    }
+                  {
+                    originalSource: image,
+                    alt: `${title}-alt-image`,
+                    mediaContentType: "IMAGE"
+                  },
                 ]
-            },
-        });
-        const createdProductJson = await createProduct.json();
-        return json({ success: true, actionType });
+              },
+        })
+
+        const createProductWithNewMediaJson = await createProductWithNewMedia.json()
+        const productId = createProductWithNewMediaJson.data.productCreate.product.id
+
+        await admin.graphql(
+          `#graphql
+          `
+        )
+
+        return json({ success: true, actionType })
     }
 
     if (actionType === 'edit') {
-        const id = formData.get('id');
-        const title = formData.get('title');
-        const description = formData.get('description');
-        const vendor = formData.get('vendor');
-        const price = formData.get('price');
+        const id = formData.get('id')
+        const title = formData.get('title')
+        const description = formData.get('description')
+        const vendor = formData.get('vendor')
+        const price = formData.get('price')
         const image = formData.get('image')
     
-        await admin.graphql(`
-            mutation updateProduct($input: ProductInput!) {
-                productUpdate(input: $input) {
-                    product {
-                        id
-                        title
-                        vendor
-                        descriptionHtml
-                        variants(first: 1) {
-                            edges {
-                                node {
-                                    price
-                                }
-                            }
-                        }
-                        media(first: 1) {
-                            edges {
-                                node {
-                                    alt
-                                    # originalSrc
-                                    mediaContentType
-                                }
-                            }
-                        }
-                    }
-                    userErrors {
-                        field
-                        message
-                    }
-                }
-            }
-        `,
-        {
-            variables: {
-                input: {
-                    id,
-                    title,
-                    vendor,
-                    descriptionHtml: description,
-                },
-                variants: [
-                    {
-                        price: parseFloat(price),
-                    }
-                ],
-                media: [
-                    {
-                        // originalSource: image,
-                        mediaContentType: "IMAGE",
-                        alt: `${image}-alt-image`,
-                    },
-                ]
-            }
-        })
-        return json({ success: true, actionType });
+        return json({ success: true, actionType })
     }
     
     return json({ error: "Unsupported action" })
@@ -422,3 +356,4 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled }) {
       </BlockStack>
     );
 }
+  
