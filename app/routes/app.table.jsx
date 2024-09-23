@@ -19,6 +19,7 @@ export const loader = async ({ request }) => {
               variants(first: 1) {
                 edges {
                     node {
+                        id
                         price
                     }
                 }
@@ -26,10 +27,14 @@ export const loader = async ({ request }) => {
               media(first: 1) {
                 edges {
                     node {
+                        id
                         alt
                         mediaContentType
                         preview {
-                            status
+                            image {
+                                url
+                                id
+                            }
                         }
                     }
                 }
@@ -77,8 +82,8 @@ export const action = async ({ request }) => {
 
         const createProduct = await admin.graphql(
         `
-            mutation productCreate($input: ProductInput!) {
-                productCreate(input: $input) {
+            mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
+                productCreate(input: $input, media: $media) {
                     product {
                         id
                         title
@@ -91,6 +96,16 @@ export const action = async ({ request }) => {
                                     id
                                     price
                                     # sku
+                                }
+                            }
+                        }
+                        media(first: 1) {
+                            edges {
+                                node {
+                                    id
+                                    alt
+                                    mediaContentType
+                                    # originalSource
                                 }
                             }
                         }
@@ -114,50 +129,20 @@ export const action = async ({ request }) => {
                             price: parseFloat(price),
                         }
                     ],
-                }
+                },
+                media: [
+                    {
+                        alt: 'image',
+                        mediaContentType: 'IMAGE',
+                        // originalSource: image,
+                    }
+                ]
             },
-            apiVersion: '2024-01'
         });
         const createdProductJson = await createProduct.json();
-
-        await admin.graphql(
-        `
-            mutation AddMediaToProduct($media: [CreateMediaInput!]!, $productId: ID!) {
-                productCreateMedia(media: $media, productId: $productId) {
-                    media {
-                        id
-                        alt
-                        mediaContentType
-                        preview {
-                            status
-                        }
-                    }
-                    mediaUserErrors {
-                        field
-                        message
-                    }
-                    product {
-                        id
-                    }
-                }
-            }
-        `,
-            {
-                variables: {
-                    media: [
-                        {
-                            originalSource: image,
-                            alt: `${title}-image`,
-                            mediaContentType: "IMAGE"
-                        },
-                    ],
-                    productId: createdProductJson.data.productCreate.product.id
-                }
-            }
-        )
         return json({ success: true, actionType });
     }
-    
+
     if (actionType === 'edit') {
         const id = formData.get('id');
         const title = formData.get('title');
@@ -181,6 +166,15 @@ export const action = async ({ request }) => {
                                 }
                             }
                         }
+                        media(first: 1) {
+                            edges {
+                                node {
+                                    alt
+                                    # originalSrc
+                                    mediaContentType
+                                }
+                            }
+                        }
                     }
                     userErrors {
                         field
@@ -201,58 +195,16 @@ export const action = async ({ request }) => {
                     {
                         price: parseFloat(price),
                     }
+                ],
+                media: [
+                    {
+                        // originalSource: image,
+                        mediaContentType: "IMAGE",
+                        alt: `${image}-alt-image`,
+                    },
                 ]
             }
         })
-
-        // update price
-        console.log(`update price`)
-        await admin.graphql(
-        `
-            mutation updateProductVariant($input: ProductVariantInput!) {
-                productVariantUpdate(input: $input) {
-                    productVariant {
-                        price
-                    }
-                    userErrors {
-                        field
-                        message
-                    }
-                }
-            }
-        `, 
-        {
-            variables: {
-                input: {
-                    price: parseFloat(price),
-                },
-            }
-        })
-
-        // update media
-        console.log(`update media`)
-        // await admin.graphql(
-        // `
-        //     mutation updateProductMedia($media: [UpdateMediaInput!]!, $productId: ID!) {
-        //         productUpdateMedia(media: $media, productId: $productId) {
-        //             media  {
-        //                 alt
-        //             }
-        //         }
-        //     }
-        // `,
-        // {
-        //     variables: {
-        //         media: [
-        //             {
-        //                 // mediaContentType: "IMAGE",
-        //                 alt: image,
-        //             },
-        //         ],
-        //         productId: id
-        //     }
-        // })
-
         return json({ success: true, actionType });
     }
     
@@ -271,8 +223,9 @@ export default function TablePage() {
         id: '',
         title: '',
         description: '',
-        price: '',
         vendor: '',
+        price: '',
+        media: ''
     });
     const [files, setFiles] = useState([])
 
@@ -291,6 +244,7 @@ export default function TablePage() {
             description: product.description,
             price: product.variants.edges[0].node.price,
             vendor: product.vendor,
+            media: product.media?.edges[0]?.node?.alt || ''
         })
         setFiles([])
     }, [])
@@ -328,7 +282,7 @@ export default function TablePage() {
                     submit({
                         _action: 'create',
                         ...currentProduct,
-                        image: files[0] ? src : ''
+                        image: src
                     }, { method: 'post' });
                     break;
                 case 'edit':
