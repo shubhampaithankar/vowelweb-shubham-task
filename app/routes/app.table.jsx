@@ -1,3 +1,5 @@
+// fix image not loading, and add variants when creating product
+
 import { json } from '@remix-run/node'
 import { useCallback, useEffect, useState } from 'react'
 import { Page, Layout, Card, DataTable, Button, BlockStack, Modal, Form, FormLayout, TextField, DropZone, Thumbnail, Banner, List, Text } from '@shopify/polaris'
@@ -131,12 +133,41 @@ export const action = async ({ request }) => {
         }
       })
       .then((response) => response.json())
-      .then((({ data }) => {
+      .then((async ({ data }) => {
         const product = data?.productCreate.product
 
-      }))
+        // update price
+        await admin.graphql(
+            `
+              mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+                productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                  product {
+                    id
+                  }
+                  productVariants {
+                    price
+                  }
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }
+            `, {
+              variables: {
+                productId: product.id,
+                variants: [
+                  {
+                    price
+                  }
+                ]
+              }
+            }
+          )
+        }))
 
-      return json({ success: true, actionType, product, imageURL })
+        return json({ success: true, actionType, product, imageURL })
+
     }
 
     if (actionType === 'edit') {
@@ -144,7 +175,7 @@ export const action = async ({ request }) => {
       // update data and media
       await admin.graphql(
         `
-        mutation UpdateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
+        mutation UpdateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
           productUpdate(input: $input, media: $media) {
             product {
               id
@@ -215,6 +246,7 @@ export const action = async ({ request }) => {
 
       return json({ success: true, actionType })
     }
+
     return json({ error: "Unsupported action" })
   } catch (error) {
     return json({ error })
@@ -465,7 +497,6 @@ export default function TablePage() {
     )
 }
 
-
 function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
   const [rejectedFiles, setRejectedFiles] = useState([]);
   const [isImageValid, setIsImageValid] = useState(true); // Track validity of the image URL
@@ -473,16 +504,19 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
 
   const handleDrop = useCallback(
     (_droppedFiles, acceptedFiles, rejectedFiles) => {
-      setFiles((files) => [...files, ...acceptedFiles]);
+      // Replace the files array with the newly uploaded file
+      setFiles([...acceptedFiles]);
       setRejectedFiles(rejectedFiles);
     },
     [setFiles],
   );
 
-  // If there's an image passed down via props, display it, else display uploaded files
-  const displayFiles = image
+  // Use the new file for display if available, otherwise fallback to the passed image prop
+  const displayFiles = files.length > 0
+    ? files
+    : image
     ? [{ name: 'Uploaded image', size: 0, source: image }]
-    : files;
+    : [];
 
   // Check if the image URL is valid
   useEffect(() => {
@@ -495,12 +529,12 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
   }, [image]);
 
   const fileUpload = !files.length && !image && <DropZone.FileUpload />;
-  
+
   const uploadedFiles = displayFiles.length > 0 && (
     <BlockStack vertical={"true"}>
       {displayFiles.map((file, index) => (
         <BlockStack alignment="center" key={index}>
-          {isImageValid ? (
+          {isImageValid || file.source ? (
             <Thumbnail
               size="small"
               alt={file.name}
@@ -542,5 +576,3 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
     </BlockStack>
   );
 }
-
-  
