@@ -292,7 +292,7 @@ export default function TablePage() {
                             <TextField label="Description" name="description" value={currentProduct.description} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'description')}/>
                             <TextField label="Price" type="number" name="price" value={currentProduct.price} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'price')} />
                             <TextField label="Vendor" name="vendor" value={currentProduct.vendor} disabled={title === 'delete'} onChange={(event) => handleChange(event, 'vendor')} />
-                            <DropZoneWithImageFileUpload files={files} setFiles={setFiles} disabled={title === 'delete'}/>
+                            <DropZoneWithImageFileUpload files={files} setFiles={setFiles} disabled={title === 'delete'} image={currentProduct?.media?.edges[0]?.node?.preview?.image?.url || ''}/>
                         </Form>
                     </FormLayout>
                 </Modal.Section>    
@@ -301,38 +301,43 @@ export default function TablePage() {
     )
 }
 
-function DropZoneWithImageFileUpload({ files, setFiles, disabled }) {
-    const [rejectedFiles, setRejectedFiles] = useState([]);
-    const hasError = rejectedFiles.length > 0;
+function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
+    const [rejectedFiles, setRejectedFiles] = useState([])
+    const hasError = rejectedFiles.length > 0
   
     const handleDrop = useCallback(
       (_droppedFiles, acceptedFiles, rejectedFiles) => {
-        setFiles((files) => [...files, ...acceptedFiles]);
-        setRejectedFiles(rejectedFiles);
+        setFiles((files) => [...files, ...acceptedFiles])
+        setRejectedFiles(rejectedFiles)
       },
       [],
-    );
+    )
   
-    const fileUpload = !files.length && <DropZone.FileUpload />;
-    const uploadedFiles = files.length > 0 && (
-      <BlockStack vertical>
-        {files.map((file, index) => (
+    // If there's an image passed down via props, display it, else display uploaded files
+    const displayFiles = image
+      ? [{ name: 'Uploaded image', size: 0, source: image }]
+      : files
+  
+    const fileUpload = !files.length && !image && <DropZone.FileUpload />
+    const uploadedFiles = displayFiles.length > 0 && (
+      <BlockStack vertical={"true"}>
+        {displayFiles.map((file, index) => (
           <BlockStack alignment="center" key={index}>
             <Thumbnail
               size="small"
               alt={file.name}
-              source={window.URL.createObjectURL(file)}
+              source={file.source || window.URL.createObjectURL(file)}
             />
             <div>
               {file.name}{' '}
               <Text variant="bodySm" as="p">
-                {file.size} bytes
+                {file.size ? `${file.size} bytes` : 'From URL'}
               </Text>
             </div>
           </BlockStack>
         ))}
       </BlockStack>
-    );
+    )
   
     const errorMessage = hasError && (
       <Banner title="The following images couldn’t be uploaded:" tone="critical">
@@ -344,16 +349,16 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled }) {
           ))}
         </List>
       </Banner>
-    );
+    )
   
     return (
-      <BlockStack vertical={true}>
+      <BlockStack vertical={"true"}>
         {errorMessage}
         <DropZone accept="image/*" type="image" onDrop={handleDrop} disabled={disabled} label="Images">
           {uploadedFiles}
           {fileUpload}
         </DropZone>
       </BlockStack>
-    );
+    )
 }
   
