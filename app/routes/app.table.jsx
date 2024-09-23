@@ -50,12 +50,28 @@ export const loader = async ({ request }) => {
 }
 // create, edit, delete products // post, put, delete products
 export const action = async ({ request }) => {
+  try {
     const { admin } = await authenticate.admin(request)
     const formData = await request.formData()
     const actionType = formData.get('_action')
+    const product = JSON.parse(formData.get('product')|| '')
+    
+    if (!product) return ({ success: false, error: 'Product not found', actionType })
+    
+    const id = product.id || null
+
+    const title = product.title
+    const description = product.description
+    const vendor = product.vendor
+
+    const priceId = product.variants?.edges[0]?.node?.id
+    const price = product.variants?.edges[0]?.node?.price
+
+    const imageId = product.media?.edges[0]?.node?.id
+    const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
+    const alt = `${title}-image-alt`
 
     if (actionType === 'delete') {
-        const productId = formData.get('productId')
         await admin.graphql(`
         #graphql
           mutation DeleteProduct($input: ProductDeleteInput!) {
@@ -65,7 +81,7 @@ export const action = async ({ request }) => {
           }`,
           {
             variables: {
-              input: { id: productId },
+              input: { id },
             },
           }
         )
@@ -74,75 +90,135 @@ export const action = async ({ request }) => {
     }
 
     if (actionType === 'create') {
-        const title = formData.get('title')
-        const description = formData.get('description')
-        const price = formData.get('price')
-        const vendor = formData.get('vendor')
-        const image = formData.get('image')
-
-        const createProductWithNewMedia = await admin.graphql(`
-        #graphql
-            mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
-              productCreate(input: $input, media: $media) {
-                product {
-                  id
-                  title
-                  media(first: 10) {
-                    nodes {
-                      alt
-                      mediaContentType
-                      preview {
-                        status
-                      }
-                    }
+      await admin.graphql(`
+        mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
+          productCreate(input: $input, media: $media) {
+            product {
+              id
+              title
+              descriptionHtml
+              vendor
+              media(first: 10) {
+                nodes {
+                  alt
+                  mediaContentType
+                  preview {
+                    status
                   }
                 }
-                userErrors {
-                  field
-                  message
-                }
               }
-            }`,
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }  
+      `, {
+        variables: {
+          input: {
+            title,
+            descriptionHtml: description,
+            vendor
+          },
+          media: [
             {
-              variables: {
-                input: {
-                  title,
-                  descriptionHtml: description,
-                  vendor,
-                },
-                media: [
-                  {
-                    originalSource: image,
-                    alt: `${title}-alt-image`,
-                    mediaContentType: "IMAGE"
-                  },
-                ]
-              },
-        })
+              originalSource: 'https://fastly.picsum.photos/id/618/200/200.jpg?hmac=749yPgO2NHLB8qH92MCDtCjdkglAPh6-J4CygmoI2JY',
+              alt,
+              mediaContentType: "IMAGE"
+            }
+          ]
+        }
+      })
+      .then((response) => response.json())
+      .then((({ data }) => {
+        const product = data?.productCreate.product
 
-        const createProductWithNewMediaJson = await createProductWithNewMedia.json()
-        const productId = createProductWithNewMediaJson.data.productCreate.product.id
+      }))
 
-        await admin.graphql(
-          `#graphql
-          `
-        )
-
-        return json({ success: true, actionType })
+      return json({ success: true, actionType, product, imageURL })
     }
 
     if (actionType === 'edit') {
-        const id = formData.get('id')
-        const title = formData.get('title')
-        const description = formData.get('description')
-        const vendor = formData.get('vendor')
-        const price = formData.get('price')
-        const image = formData.get('image')
-    
-        return json({ success: true, actionType })
+
+      // update data and media
+      await admin.graphql(
+        `
+        mutation UpdateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
+          productUpdate(input: $input, media: $media) {
+            product {
+              id
+              title
+              descriptionHtml
+              media(first: 10) {
+                nodes {
+                  alt
+                  mediaContentType
+                  preview {
+                    status
+                  }
+                }
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }  
+      `, {
+        variables: {
+          input: {
+            id,
+            title,
+            descriptionHtml: description,
+          },
+          media: [
+            {
+              originalSource: imageURL,
+              alt,
+              mediaContentType: "IMAGE"
+            }
+          ]
+        }
+      })
+
+      // update price
+      await admin.graphql(
+        `
+          mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+              product {
+                id
+              }
+              productVariants {
+                price
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `, {
+          variables: {
+            productId: id,
+            variants: [
+              {
+                id: priceId,
+                price
+              }
+            ]
+          }
+        }
+      )
+
+      return json({ success: true, actionType })
     }
-    
     return json({ error: "Unsupported action" })
+  } catch (error) {
+    return json({ error })
+  }
 }
 
 export default function TablePage() {
@@ -150,6 +226,7 @@ export default function TablePage() {
     const loading = state === 'loading'
   
     const { products } = useLoaderData()
+    console.log(products)
   
     const [title, setTitle] = useState('')
     const [isOpen, setIsOpen] = useState(false)
@@ -163,7 +240,6 @@ export default function TablePage() {
         id: '',
         title: '',
         description: '',
-        price: '',
         vendor: '',
         variants: { edges: [{ node: { price: '' } }] },
         media: { edges: [{ node: { preview: { image: { url: '' } } } }] },
@@ -208,35 +284,63 @@ export default function TablePage() {
   
     // Handle actions for add/edit/delete products
     const handleAction = () => {
-      const src = files[0] ? URL.createObjectURL(files[0]) : ''
+      // const src = files[0] ? URL.createObjectURL(files[0]) : ''
+      const src = files[0] || ''
       try {
         switch (title) {
-          case 'add':
-            submit(
-              {
-                _action: 'create',
-                ...currentProduct,
-                image: src,
-              },
-              { method: 'post' }
-            )
-            break
-          case 'edit':
-            submit(
-              {
-                _action: 'edit',
-                productId: currentProduct.id,
-                ...currentProduct,
-                image: src || currentProduct.media?.edges[0]?.node?.preview?.image?.url || '',
-              },
-              { method: 'put' }
-            )
-            break
+          case 'add': {
+              const product = JSON.stringify({
+                  ...currentProduct,
+                  media: {
+                      edges: [
+                        {
+                          node: {
+                            preview: {
+                              image: { url: src }
+                            }
+                          }
+                        }
+                      ]
+                  }
+              })
+              submit(
+                {
+                    _action: 'create',
+                    product
+                },
+                { method: 'post' }
+              )
+              break
+          }
+          case 'edit': {
+              const product = JSON.stringify({
+                  ...currentProduct,
+                  media: {
+                      edges: [
+                        {
+                          node: {
+                            preview: {
+                              image: { url: src || currentProduct.media?.edges[0]?.node?.preview?.image?.url }
+                            }
+                          }
+                        }
+                      ]
+                  }
+              })
+              submit(
+                {
+                  _action: 'edit',
+                  product: product
+                },
+                { method: 'put' }
+              )
+              break
+          }
           case 'delete':
             submit(
               {
                 _action: 'delete',
-                productId: currentProduct.id,
+                product: JSON.stringify(currentProduct),
               },
               { method: 'delete' }
             )
@@ -363,63 +467,80 @@ export default function TablePage() {
 
 
 function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
-    const [rejectedFiles, setRejectedFiles] = useState([])
-    const hasError = rejectedFiles.length > 0
+  const [rejectedFiles, setRejectedFiles] = useState([]);
+  const [isImageValid, setIsImageValid] = useState(true); // Track validity of the image URL
+  const hasError = rejectedFiles.length > 0;
+
+  const handleDrop = useCallback(
+    (_droppedFiles, acceptedFiles, rejectedFiles) => {
+      setFiles((files) => [...files, ...acceptedFiles]);
+      setRejectedFiles(rejectedFiles);
+    },
+    [setFiles],
+  );
+
+  // If there's an image passed down via props, display it, else display uploaded files
+  const displayFiles = image
+    ? [{ name: 'Uploaded image', size: 0, source: image }]
+    : files;
+
+  // Check if the image URL is valid
+  useEffect(() => {
+    if (image) {
+      const img = new Image();
+      img.onload = () => setIsImageValid(true);
+      img.onerror = () => setIsImageValid(false);
+      img.src = image;
+    }
+  }, [image]);
+
+  const fileUpload = !files.length && !image && <DropZone.FileUpload />;
   
-    const handleDrop = useCallback(
-      (_droppedFiles, acceptedFiles, rejectedFiles) => {
-        setFiles((files) => [...files, ...acceptedFiles])
-        setRejectedFiles(rejectedFiles)
-      },
-      [],
-    )
-  
-    // If there's an image passed down via props, display it, else display uploaded files
-    const displayFiles = image
-      ? [{ name: 'Uploaded image', size: 0, source: image }]
-      : files
-  
-    const fileUpload = !files.length && !image && <DropZone.FileUpload />
-    const uploadedFiles = displayFiles.length > 0 && (
-      <BlockStack vertical={"true"}>
-        {displayFiles.map((file, index) => (
-          <BlockStack alignment="center" key={index}>
+  const uploadedFiles = displayFiles.length > 0 && (
+    <BlockStack vertical={"true"}>
+      {displayFiles.map((file, index) => (
+        <BlockStack alignment="center" key={index}>
+          {isImageValid ? (
             <Thumbnail
               size="small"
               alt={file.name}
               source={file.source || window.URL.createObjectURL(file)}
             />
-            <div>
-              {file.name}{' '}
-              <Text variant="bodySm" as="p">
-                {file.size ? `${file.size} bytes` : 'From URL'}
-              </Text>
-            </div>
-          </BlockStack>
+          ) : (
+            <div>Invalid image URL</div> // Display an error message for invalid URLs
+          )}
+          <div>
+            {file.name}{' '}
+            <Text variant="bodySm" as="p">
+              {file.size ? `${file.size} bytes` : 'From URL'}
+            </Text>
+          </div>
+        </BlockStack>
+      ))}
+    </BlockStack>
+  );
+
+  const errorMessage = hasError && (
+    <Banner title="The following images couldn’t be uploaded:" tone="critical">
+      <List type="bullet">
+        {rejectedFiles.map((file, index) => (
+          <List.Item key={index}>
+            {`"${file.name}" is not supported. File type must be .gif, .jpg, .png or .svg.`}
+          </List.Item>
         ))}
-      </BlockStack>
-    )
-  
-    const errorMessage = hasError && (
-      <Banner title="The following images couldn’t be uploaded:" tone="critical">
-        <List type="bullet">
-          {rejectedFiles.map((file, index) => (
-            <List.Item key={index}>
-              {`"${file.name}" is not supported. File type must be .gif, .jpg, .png or .svg.`}
-            </List.Item>
-          ))}
-        </List>
-      </Banner>
-    )
-  
-    return (
-      <BlockStack vertical={"true"}>
-        {errorMessage}
-        <DropZone accept="image/*" type="image" onDrop={handleDrop} disabled={disabled} label="Images">
-          {uploadedFiles}
-          {fileUpload}
-        </DropZone>
-      </BlockStack>
-    )
+      </List>
+    </Banner>
+  );
+
+  return (
+    <BlockStack vertical={"true"}>
+      {errorMessage}
+      <DropZone accept="image/*" type="image" onDrop={handleDrop} disabled={disabled} label="Images">
+        {uploadedFiles}
+        {fileUpload}
+      </DropZone>
+    </BlockStack>
+  );
 }
+
   
