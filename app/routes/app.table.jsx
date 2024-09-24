@@ -7,18 +7,18 @@ import { authenticate } from "../shopify.server"
 // Helper function for making GraphQL requests
 const graphqlRequest = async (admin, query, variables) => {
   try {
-    const response = await admin.graphql(query, { variables });
-    return response.json();
+    const response = await admin.graphql(query, { variables })
+    return response.json()
   } catch (error) {
-    console.error('GraphQL Error:', error);
-    throw new Error('Failed to execute GraphQL request');
+    console.error('GraphQL Error:', error)
+    throw new Error('Failed to execute GraphQL request')
   }
 }
 
 // inital popupulate data // get data from graphql
 export const loader = async ({ request }) => {
   try {
-    const { admin } = await authenticate.admin(request);
+    const { admin } = await authenticate.admin(request)
     const query = `
       {
         products(first: 10) {
@@ -53,225 +53,47 @@ export const loader = async ({ request }) => {
           }
         }
       }
-    `;
-    const responseJson = await graphqlRequest(admin, query);
-    const products = responseJson.data.products.edges.map((edge) => edge.node);
-    return json({ products, success: true });
+    `
+    const responseJson = await graphqlRequest(admin, query)
+    const products = responseJson.data.products.edges.map((edge) => edge.node)
+    return json({ products, success: true })
   } catch (error) {
-    return json({ error, success: false });
+    return json({ error, success: false })
   }
 
 }
 // create, edit, delete products // post, put, delete products
 export const action = async ({ request }) => {
+  const { admin } = await authenticate.admin(request)
+  const formData = await request.formData()
+  const actionType = formData.get('_action')
+  const productData = JSON.parse(formData.get('product') || '')
+
+  if (!productData) return json({ success: false, error: 'Product not found', actionType })
+
+  const { id, title, description, vendor, variants, media } = productData
+  const priceId = variants?.edges[0]?.node?.id
+  const price = variants?.edges[0]?.node?.price
+  const imageURL = media?.edges[0]?.node?.preview?.image?.url
+  const alt = `${title}-image-alt`
+  
   try {
-    const { admin } = await authenticate.admin(request)
-    const formData = await request.formData()
-    const actionType = formData.get('_action')
-    const product = JSON.parse(formData.get('product')|| '')
-
-    if (!product) return ({ success: false, error: 'Product not found', actionType })
-    
-    const id = product.id || null
-
-    const title = product.title
-    const description = product.description
-    const vendor = product.vendor
-
-    const priceId = product.variants?.edges[0]?.node?.id
-    const price = product.variants?.edges[0]?.node?.price
-
-    // const imageId = product.media?.edges[0]?.node?.id
-    const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
-    const alt = `${title}-image-alt`
-
-    if (actionType === 'delete') {
-        await admin.graphql(`
-        #graphql
+    switch (actionType) {
+      case 'delete': {
+        await graphqlRequest(admin, `
           mutation DeleteProduct($input: ProductDeleteInput!) {
             productDelete(input: $input) {
               deletedProductId
             }
-          }`,
-          {
-            variables: {
-              input: { id },
-            },
           }
-        )
-        
+        `, { input: { id } })
         return json({ success: true, actionType })
+      }
+        
+      default: json({ success: false, error: 'Unsupported action', actionType })
     }
-
-    if (actionType === 'create') {
-      await admin.graphql(`
-        mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
-          productCreate(input: $input, media: $media) {
-            product {
-              id
-              title
-              descriptionHtml
-              vendor
-              media(first: 10) {
-                nodes {
-                  alt
-                  mediaContentType
-                  preview {
-                    status
-                  }
-                }
-              }
-              variants(first: 1) {
-                edges {
-                  node {
-                    id
-                    price
-                  }
-                }
-              }
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }  
-      `, {
-        variables: {
-          input: {
-            title,
-            descriptionHtml: description,
-            vendor
-          },
-          media: [
-            {
-              // originalSource: imageURL,
-              originalSource: "blob:https://queue-menus-berkeley-carriers.trycloudflare.com/d9b7babb-d07f-4a08-8f22-464f73c0ee76",
-              alt,
-              mediaContentType: "IMAGE"
-            }
-          ]
-        }
-      })
-      .then((response) => response.json())
-      .then((async ({ data }) => {
-        const product = data?.productCreate.product
-        const newPriceId = product.variants?.edges[0]?.node?.id
-
-        // update price
-        await admin.graphql(
-          `
-            mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-                product {
-                  id
-                }
-                productVariants {
-                  price
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }
-          `, {
-            variables: {
-              productId: product.id,
-              variants: [
-                {
-                  id: newPriceId,
-                  price
-                }
-              ]
-            }
-          }
-        )}))
-
-      return json({ success: true, actionType, imageURL })
-
-    }
-
-    if (actionType === 'edit') {
-
-      // update data and media
-      await admin.graphql(
-        `
-        mutation UpdateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
-          productUpdate(input: $input, media: $media) {
-            product {
-              id
-              title
-              descriptionHtml
-              media(first: 10) {
-                nodes {
-                  alt
-                  mediaContentType
-                  preview {
-                    status
-                  }
-                }
-              }
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }  
-      `, {
-        variables: {
-          input: {
-            id,
-            title,
-            descriptionHtml: description,
-          },
-          media: [
-            {
-              originalSource: imageURL,
-              alt,
-              mediaContentType: "IMAGE"
-            }
-          ]
-        }
-      })
-
-      // update price
-      await admin.graphql(
-        `
-          mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-              product {
-                id
-              }
-              productVariants {
-                price
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `, {
-          variables: {
-            productId: id,
-            variants: [
-              {
-                id: priceId,
-                price
-              }
-            ]
-          }
-        }
-      )
-
-      return json({ success: true, actionType })
-    }
-
-    return json({ error: "Unsupported action" })
   } catch (error) {
-    return json({ error })
+    return json({ success: false, error: JSON.stringify(error), actionType })
   }
 }
 
@@ -516,37 +338,37 @@ export default function TablePage() {
 }
 
 function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
-  const [rejectedFiles, setRejectedFiles] = useState([]);
-  const [isImageValid, setIsImageValid] = useState(true); // Track validity of the image URL
-  const hasError = rejectedFiles.length > 0;
+  const [rejectedFiles, setRejectedFiles] = useState([])
+  const [isImageValid, setIsImageValid] = useState(true) // Track validity of the image URL
+  const hasError = rejectedFiles.length > 0
 
   const handleDrop = useCallback(
     (_droppedFiles, acceptedFiles, rejectedFiles) => {
       // Replace the files array with the newly uploaded file
-      setFiles([...acceptedFiles]);
-      setRejectedFiles(rejectedFiles);
+      setFiles([...acceptedFiles])
+      setRejectedFiles(rejectedFiles)
     },
     [setFiles],
-  );
+  )
 
   // Use the new file for display if available, otherwise fallback to the passed image prop
   const displayFiles = files.length > 0
     ? files
     : image
     ? [{ name: 'Uploaded image', size: 0, source: image }]
-    : [];
+    : []
 
   // Check if the image URL is valid
   useEffect(() => {
     if (image) {
-      const img = new Image();
-      img.onload = () => setIsImageValid(true);
-      img.onerror = () => setIsImageValid(false);
-      img.src = image;
+      const img = new Image()
+      img.onload = () => setIsImageValid(true)
+      img.onerror = () => setIsImageValid(false)
+      img.src = image
     }
-  }, [image]);
+  }, [image])
 
-  const fileUpload = !files.length && !image && <DropZone.FileUpload />;
+  const fileUpload = !files.length && !image && <DropZone.FileUpload />
 
   const uploadedFiles = displayFiles.length > 0 && (
     <BlockStack vertical={"true"}>
@@ -570,7 +392,7 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
         </BlockStack>
       ))}
     </BlockStack>
-  );
+  )
 
   const errorMessage = hasError && (
     <Banner title="The following images couldn’t be uploaded:" tone="critical">
@@ -582,7 +404,7 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
         ))}
       </List>
     </Banner>
-  );
+  )
 
   return (
     <BlockStack vertical={"true"}>
@@ -592,5 +414,5 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
         {fileUpload}
       </DropZone>
     </BlockStack>
-  );
+  )
 }
