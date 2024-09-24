@@ -90,6 +90,22 @@ export const action = async ({ request }) => {
         return json({ success: true, actionType })
       }
 
+      case 'create': {
+        await graphqlRequest(admin, `
+          mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
+            productCreate(input: $input, media: $media) {
+              product {
+                id
+              }
+            }
+          }
+        `, {
+          input: { title, descriptionHtml: description, vendor },
+          media: [{ originalSource: imageURL, alt, mediaContentType: 'IMAGE' }]
+        })
+        return json({ success: true, actionType })
+      }
+
       case 'edit': {
         await graphqlRequest(admin, `
           mutation UpdateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
@@ -102,7 +118,7 @@ export const action = async ({ request }) => {
         `, {
           input: { id, title, descriptionHtml: description },
           media: [{ originalSource: imageURL, alt, mediaContentType: 'IMAGE' }]
-        });
+        })
 
         // Update price
         await graphqlRequest(admin, `
@@ -116,7 +132,7 @@ export const action = async ({ request }) => {
         `, {
           productId: id,
           variants: [{ id: priceId, price }]
-        });
+        })
         return json({ success: true, actionType })
       }
         
