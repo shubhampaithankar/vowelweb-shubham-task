@@ -5,6 +5,14 @@ import { json } from '@remix-run/node'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
 
+// upload file to retrieve image
+const uploadFile = (file) => {
+  const placeholder = 'https://cdn.shopify.com/s/files/1/0264/9785/products/image.png?v=1630538197'
+  const url = null
+  // logic to upload file if its image
+  return url ?? placeholder
+}
+
 // Helper function for making GraphQL requests
 const graphqlRequest = async (admin, query, variables) => {
   try {
@@ -73,12 +81,10 @@ export const action = async ({ request }) => {
   const productData = JSON.parse(formData.get('product') || '')
   if (!productData) return json({ success: false, error: 'Product not found', actionType })
 
-  const src = `https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081`
-
   const { id, title, description, vendor, variants, media } = productData
   const priceId = variants?.edges[0]?.node?.id
   const price = variants?.edges[0]?.node?.price
-  const imageURL = !file ? media?.edges[0]?.node?.preview?.image?.url : src
+  const imageURL = !file ? media?.edges[0]?.node?.preview?.image?.url : uploadFile(file)
   const alt = `${title}-image-alt`
 
   try {
@@ -256,7 +262,8 @@ export default function TablePage() {
     const handleAction = () => {
       try {
         const formData = new FormData()
-        if (files.length > 0) formData.append('file', files[0])
+        console.log(files)
+        // if (files.length > 0) formData.append('file', files[0])
 
         const product = JSON.stringify(currentProduct)
         formData.append('product', product)
@@ -461,7 +468,7 @@ function DropZoneWithImageFileUpload({ files, setFiles, disabled, image }) {
   return (
     <BlockStack vertical={"true"}>
       {errorMessage}
-      <DropZone accept="image/*" type="image" onDrop={handleDrop} disabled={disabled} label="Images">
+      <DropZone type="file" onDrop={handleDrop} disabled={disabled} label="Images">
         {uploadedFiles}
         {fileUpload}
       </DropZone>
