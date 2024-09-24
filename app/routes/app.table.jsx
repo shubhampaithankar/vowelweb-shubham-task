@@ -9,7 +9,7 @@ import { authenticate } from "../shopify.server"
 const uploadFile = (file) => {
   const placeholder = 'https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081'
   if (!file) return placeholder
-  const url = null
+  let url = null
   // logic to upload file if its image
   return url ? url : placeholder
 }
@@ -75,31 +75,22 @@ export const loader = async ({ request }) => {
 // create, edit, delete products // post, put, delete products
 export const action = async ({ request }) => {
   const { admin } = await authenticate.admin(request)
-
-  // const formData = await unstable_parseMultipartFormData(request, () => 
-  //   unstable_createFileUploadHandler({
-  //     avoidFileConflicts: false,
-  //     maxPartSize: 10 * 1024 * 1024,
-  //     directory: 'public/img'
-  //   }),
-  // )
-  // return { success: true, formData };
-
+  
   const formData = await request.formData()
   const actionType = formData.get('_action')
   const file = formData.get('file')
-
+  
   const productData = JSON.parse(formData.get('product') || '')
   if (!productData) return json({ success: false, error: 'Product not found', actionType })
-
-  const { id, title, description, vendor, variants, media } = productData
-  const priceId = variants?.edges[0]?.node?.id
-  const price = variants?.edges[0]?.node?.price
-  const imageURL = file ? uploadFile(file) : media?.edges[0]?.node?.preview?.image?.url
-  const alt = `${title}-image-alt`
-
-  try {
-    switch (actionType) {
+    
+    const { id, title, description, vendor, variants, media } = productData
+    const priceId = variants?.edges[0]?.node?.id
+    const price = variants?.edges[0]?.node?.price
+    const imageURL = uploadFile(file) || media?.edges[0]?.node?.preview?.image?.url
+    const alt = `${title}-image-alt`
+    
+    try {
+      switch (actionType) {
       case 'delete': {
         await graphqlRequest(admin, `
           mutation DeleteProduct($input: ProductDeleteInput!) {
@@ -209,6 +200,7 @@ export const action = async ({ request }) => {
   } catch (error) {
     return json({ success: false, error: JSON.stringify(error), actionType })
   }
+
 }
 
 export default function TablePage() {
@@ -238,7 +230,7 @@ export default function TablePage() {
     const editProduct = useCallback((product) => {
       setIsOpen(true)
       setTitle('edit')
-      setCurrentProduct(product)
+      setCurrentProduct(JSON.parse(JSON.stringify(product)))
       setFiles([])
     }, [])
   
@@ -273,7 +265,6 @@ export default function TablePage() {
     const handleAction = () => {
       try {
         const formData = new FormData()
-        console.log(files)
         if (files.length > 0) formData.append('file', files[0])
 
         const product = JSON.stringify(currentProduct)
