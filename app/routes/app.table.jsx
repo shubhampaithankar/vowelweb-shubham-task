@@ -57,7 +57,8 @@ export const action = async ({ request }) => {
     const formData = await request.formData()
     const actionType = formData.get('_action')
     const product = JSON.parse(formData.get('product')|| '')
-    
+    const file = formData.get('file')
+
     if (!product) return ({ success: false, error: 'Product not found', actionType })
     
     const id = product.id || null
@@ -69,8 +70,11 @@ export const action = async ({ request }) => {
     const priceId = product.variants?.edges[0]?.node?.id
     const price = product.variants?.edges[0]?.node?.price
 
+    // const url = URL.createObjectURL(file)
+
     const imageId = product.media?.edges[0]?.node?.id
-    const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
+    // const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
+    const imageURL = 'https://cdn.shopify.com/s/files/1/0600/8035/7460/files/200_e1df0bb0-c3ea-4978-8c13-ef648cfb92fb.jpg?v=1727094117'
     const alt = `${title}-image-alt`
 
     if (actionType === 'delete') {
@@ -109,6 +113,14 @@ export const action = async ({ request }) => {
                   }
                 }
               }
+              variants(first: 1) {
+                edges {
+                  node {
+                    id
+                    price
+                  }
+                }
+              }
             }
             userErrors {
               field
@@ -125,7 +137,7 @@ export const action = async ({ request }) => {
           },
           media: [
             {
-              originalSource: 'https://fastly.picsum.photos/id/618/200/200.jpg?hmac=749yPgO2NHLB8qH92MCDtCjdkglAPh6-J4CygmoI2JY',
+              originalSource: imageURL,
               alt,
               mediaContentType: "IMAGE"
             }
@@ -135,38 +147,39 @@ export const action = async ({ request }) => {
       .then((response) => response.json())
       .then((async ({ data }) => {
         const product = data?.productCreate.product
+        const newPriceId = product.variants?.edges[0]?.node?.id
 
         // update price
         await admin.graphql(
-            `
-              mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-                productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-                  product {
-                    id
-                  }
-                  productVariants {
-                    price
-                  }
-                  userErrors {
-                    field
-                    message
-                  }
+          `
+            mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                product {
+                  id
+                }
+                productVariants {
+                  price
+                }
+                userErrors {
+                  field
+                  message
                 }
               }
-            `, {
-              variables: {
-                productId: product.id,
-                variants: [
-                  {
-                    price
-                  }
-                ]
-              }
             }
-          )
-        }))
+          `, {
+            variables: {
+              productId: product.id,
+              variants: [
+                {
+                  id: newPriceId,
+                  price
+                }
+              ]
+            }
+          }
+        )}))
 
-        return json({ success: true, actionType, product, imageURL })
+      return json({ success: true, actionType })
 
     }
 
@@ -304,8 +317,6 @@ export default function TablePage() {
   
         if (key === 'price' && updatedProduct.variants?.edges.length > 0) {
           updatedProduct.variants.edges[0].node.price = value
-        } else if (key === 'url' && updatedProduct.media?.edges.length > 0) {
-          updatedProduct.media.edges[0].node.preview.image.url = value
         } else if (key in updatedProduct) {
           updatedProduct[key] = value
         }
@@ -316,8 +327,9 @@ export default function TablePage() {
   
     // Handle actions for add/edit/delete products
     const handleAction = () => {
-      // const src = files[0] ? URL.createObjectURL(files[0]) : ''
-      const src = files[0] || ''
+      const src = files[0] ? URL.createObjectURL(files[0]) : ''
+      const formData = new FormData()
+      const blob = new Blob
       try {
         switch (title) {
           case 'add': {
@@ -335,13 +347,11 @@ export default function TablePage() {
                       ]
                   }
               })
-              submit(
-                {
-                    _action: 'create',
-                    product
-                },
-                { method: 'post' }
-              )
+
+              formData.append('_action', 'create')
+              formData.append('product', product)
+              formData.append('file', files.length > 0 ? files[0] : null)
+              submit(formData ,{ method: 'post' })
               break
           }
           case 'edit': {
