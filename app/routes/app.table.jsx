@@ -7,10 +7,11 @@ import { authenticate } from "../shopify.server"
 
 // upload file to retrieve image
 const uploadFile = (file) => {
-  const placeholder = 'https://cdn.shopify.com/s/files/1/0264/9785/products/image.png?v=1630538197'
+  const placeholder = 'https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081'
+  if (!file) return placeholder
   const url = null
   // logic to upload file if its image
-  return url ?? placeholder
+  return url ? url : placeholder
 }
 
 // Helper function for making GraphQL requests
@@ -74,6 +75,16 @@ export const loader = async ({ request }) => {
 // create, edit, delete products // post, put, delete products
 export const action = async ({ request }) => {
   const { admin } = await authenticate.admin(request)
+
+  // const formData = await unstable_parseMultipartFormData(request, () => 
+  //   unstable_createFileUploadHandler({
+  //     avoidFileConflicts: false,
+  //     maxPartSize: 10 * 1024 * 1024,
+  //     directory: 'public/img'
+  //   }),
+  // )
+  // return { success: true, formData };
+
   const formData = await request.formData()
   const actionType = formData.get('_action')
   const file = formData.get('file')
@@ -84,7 +95,7 @@ export const action = async ({ request }) => {
   const { id, title, description, vendor, variants, media } = productData
   const priceId = variants?.edges[0]?.node?.id
   const price = variants?.edges[0]?.node?.price
-  const imageURL = !file ? media?.edges[0]?.node?.preview?.image?.url : uploadFile(file)
+  const imageURL = file ? uploadFile(file) : media?.edges[0]?.node?.preview?.image?.url
   const alt = `${title}-image-alt`
 
   try {
@@ -193,7 +204,7 @@ export const action = async ({ request }) => {
         return json({ success: true, actionType })
       }
         
-      default: json({ success: false, error: 'Unsupported action', actionType })
+      default: json({ success: false, error: 'Unsupported action', actionType, file: file })
     }
   } catch (error) {
     return json({ success: false, error: JSON.stringify(error), actionType })
@@ -263,7 +274,7 @@ export default function TablePage() {
       try {
         const formData = new FormData()
         console.log(files)
-        // if (files.length > 0) formData.append('file', files[0])
+        if (files.length > 0) formData.append('file', files[0])
 
         const product = JSON.stringify(currentProduct)
         formData.append('product', product)
@@ -271,17 +282,17 @@ export default function TablePage() {
         switch (title) {
           case 'add': {
             formData.append('_action', 'create')
-            submit(formData, { method: 'post' })
+            submit(formData, { method: 'post', encType: 'multipart/form-data' })
             break
           }
           case 'edit': {
             formData.append('_action', 'edit')
-            submit(formData, { method: 'put' })
+            submit(formData, { method: 'put', encType: 'multipart/form-data' })
             break
           }
           case 'delete':
             formData.append('_action', 'delete')
-            submit(formData, { method: 'delete' })
+            submit(formData, { method: 'delete', encType: 'multipart/form-data' })
             break
           default:
             break
