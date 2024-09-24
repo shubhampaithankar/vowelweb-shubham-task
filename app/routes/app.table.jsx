@@ -150,7 +150,7 @@ export const action = async ({ request }) => {
             variants: [{ id: priceId, price }]
           })
         }
-        return json({ success: true, actionType, product })
+        return json({ success: true, actionType })
       }
 
       case 'edit': {
@@ -195,8 +195,7 @@ export default function TablePage() {
     const loading = state === 'loading'
   
     const { products } = useLoaderData()
-    console.log(products)
-  
+
     const [title, setTitle] = useState('')
     const [isOpen, setIsOpen] = useState(false)
     const [currentProduct, setCurrentProduct] = useState(null)
@@ -251,8 +250,8 @@ export default function TablePage() {
   
     // Handle actions for add/edit/delete products
     const handleAction = () => {
-      const src = files[0] ? URL.createObjectURL(files[0]) : null
       const formData = new FormData()
+      const src = ''
       try {
         switch (title) {
           case 'add': {
@@ -273,6 +272,7 @@ export default function TablePage() {
 
               formData.append('_action', 'create')
               formData.append('product', product)
+              // attach image to form data
               submit(formData, { method: 'post' })
               break
           }
@@ -293,21 +293,18 @@ export default function TablePage() {
               })
               formData.append('_action', 'edit')
               formData.append('product', product)
+              // attach image to form data
               submit(
-                {
-                  _action: 'edit',
-                  product: product
-                },
+                formData,
                 { method: 'put' }
               )
               break
           }
           case 'delete':
-            submit(
-              {
-                _action: 'delete',
-                product: JSON.stringify(currentProduct),
-              },
+            const product = JSON.stringify(currentProduct)
+            formData.append('_action', 'delete')
+            formData.append('product', product)
+            submit(formData,
               { method: 'delete' }
             )
             break
@@ -354,12 +351,6 @@ export default function TablePage() {
         </Button>
       </FetcherForm>,
     ])
-  
-    useEffect(() => {
-      return () => {
-        files.forEach((file) => URL.revokeObjectURL(file))
-      }
-    }, [files])
   
     return (
       <Page title="Table Page">
