@@ -89,6 +89,36 @@ export const action = async ({ request }) => {
         `, { input: { id } })
         return json({ success: true, actionType })
       }
+
+      case 'edit': {
+        await graphqlRequest(admin, `
+          mutation UpdateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
+            productUpdate(input: $input, media: $media) {
+              product {
+                id
+              }
+            }
+          }
+        `, {
+          input: { id, title, descriptionHtml: description },
+          media: [{ originalSource: imageURL, alt, mediaContentType: 'IMAGE' }]
+        });
+
+        // Update price
+        await graphqlRequest(admin, `
+          mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+              productVariants {
+                price
+              }
+            }
+          }
+        `, {
+          productId: id,
+          variants: [{ id: priceId, price }]
+        });
+        return json({ success: true, actionType })
+      }
         
       default: json({ success: false, error: 'Unsupported action', actionType })
     }
