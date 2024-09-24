@@ -73,12 +73,12 @@ export const action = async ({ request }) => {
   const productData = JSON.parse(formData.get('product') || '')
   if (!productData) return json({ success: false, error: 'Product not found', actionType })
 
-  const src = `https://yt3.googleusercontent.com/ytc/AIdro_mQzZSUJJy2-ZbI1gegOMipXReGiKi5hHMDSVXmy99VmeI=s0`
+  const src = `https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081`
 
   const { id, title, description, vendor, variants, media } = productData
   const priceId = variants?.edges[0]?.node?.id
   const price = variants?.edges[0]?.node?.price
-  const imageURL = media?.edges[0]?.node?.preview?.image?.url !== '' ? media?.edges[0]?.node?.preview?.image?.url : src
+  const imageURL = !file ? media?.edges[0]?.node?.preview?.image?.url : src
   const alt = `${title}-image-alt`
 
   try {
