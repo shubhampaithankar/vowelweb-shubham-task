@@ -1,6 +1,7 @@
-import { json } from '@remix-run/node'
 import { useCallback, useEffect, useState } from 'react'
 import { Page, Layout, Card, DataTable, Button, BlockStack, Modal, Form, FormLayout, TextField, DropZone, Thumbnail, Banner, List, Text } from '@shopify/polaris'
+
+import { json } from '@remix-run/node'
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
 
@@ -67,16 +68,19 @@ export const action = async ({ request }) => {
   const { admin } = await authenticate.admin(request)
   const formData = await request.formData()
   const actionType = formData.get('_action')
-  const productData = JSON.parse(formData.get('product') || '')
+  const file = formData.get('file')
 
+  const productData = JSON.parse(formData.get('product') || '')
   if (!productData) return json({ success: false, error: 'Product not found', actionType })
+
+  const src = `https://yt3.googleusercontent.com/ytc/AIdro_mQzZSUJJy2-ZbI1gegOMipXReGiKi5hHMDSVXmy99VmeI=s0`
 
   const { id, title, description, vendor, variants, media } = productData
   const priceId = variants?.edges[0]?.node?.id
   const price = variants?.edges[0]?.node?.price
-  const imageURL = media?.edges[0]?.node?.preview?.image?.url
+  const imageURL = media?.edges[0]?.node?.preview?.image?.url !== '' ? media?.edges[0]?.node?.preview?.image?.url : src
   const alt = `${title}-image-alt`
-  
+
   try {
     switch (actionType) {
       case 'delete': {
@@ -250,63 +254,27 @@ export default function TablePage() {
   
     // Handle actions for add/edit/delete products
     const handleAction = () => {
-      const formData = new FormData()
-      const src = ''
       try {
+        const formData = new FormData()
+        if (files.length > 0) formData.append('file', files[0])
+
+        const product = JSON.stringify(currentProduct)
+        formData.append('product', product)
+
         switch (title) {
           case 'add': {
-              const product = JSON.stringify({
-                  ...currentProduct,
-                  media: {
-                      edges: [
-                        {
-                          node: {
-                            preview: {
-                              image: { url: src }
-                            }
-                          }
-                        }
-                      ]
-                  }
-              })
-
-              formData.append('_action', 'create')
-              formData.append('product', product)
-              // attach image to form data
-              submit(formData, { method: 'post' })
-              break
+            formData.append('_action', 'create')
+            submit(formData, { method: 'post' })
+            break
           }
           case 'edit': {
-              const product = JSON.stringify({
-                  ...currentProduct,
-                  media: {
-                      edges: [
-                        {
-                          node: {
-                            preview: {
-                              image: { url: src || currentProduct.media?.edges[0]?.node?.preview?.image?.url }
-                            }
-                          }
-                        }
-                      ]
-                  }
-              })
-              formData.append('_action', 'edit')
-              formData.append('product', product)
-              // attach image to form data
-              submit(
-                formData,
-                { method: 'put' }
-              )
-              break
+            formData.append('_action', 'edit')
+            submit(formData, { method: 'put' })
+            break
           }
           case 'delete':
-            const product = JSON.stringify(currentProduct)
             formData.append('_action', 'delete')
-            formData.append('product', product)
-            submit(formData,
-              { method: 'delete' }
-            )
+            submit(formData, { method: 'delete' })
             break
           default:
             break
@@ -377,7 +345,7 @@ export default function TablePage() {
         >
           <Modal.Section>
             <FormLayout>
-              <Form onSubmit={submit}>
+              <Form encType='multipart/form-data' preventDefault={true}>
                 <TextField
                   label="Title"
                   name="title"
