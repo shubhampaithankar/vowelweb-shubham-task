@@ -108,9 +108,9 @@ export default function Index() {
   return (
     <Page>
       <TitleBar title="Remix app template">
-        <button variant="primary" onClick={generateProduct}>
+        {/* <button variant="primary" onClick={generateProduct}>
           Generate a product
-        </button>
+        </button> */}
       </TitleBar>
       <BlockStack gap="500">
         <Layout>
@@ -164,9 +164,9 @@ export default function Index() {
                   </Text>
                 </BlockStack>
                 <InlineStack gap="300">
-                  <Button loading={isLoading} onClick={generateProduct}>
+                  {/* <Button loading={isLoading} onClick={generateProduct}>
                     Generate a product
-                  </Button>
+                  </Button> */}
                   {fetcher.data?.product && (
                     <Button
                       url={`shopify:admin/products/${productId}`}
