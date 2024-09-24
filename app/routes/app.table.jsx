@@ -4,6 +4,17 @@ import { Page, Layout, Card, DataTable, Button, BlockStack, Modal, Form, FormLay
 import { useLoaderData, useFetcher } from '@remix-run/react'
 import { authenticate } from "../shopify.server"
 
+// Helper function for making GraphQL requests
+const graphqlRequest = async (admin, query, variables) => {
+  try {
+    const response = await admin.graphql(query, { variables });
+    return response.json();
+  } catch (error) {
+    console.error('GraphQL Error:', error);
+    throw new Error('Failed to execute GraphQL request');
+  }
+}
+
 // inital popupulate data // get data from graphql
 export const loader = async ({ request }) => {
     const { admin } = await authenticate.admin(request)
