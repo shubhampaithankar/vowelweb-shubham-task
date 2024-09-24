@@ -91,11 +91,35 @@ export const action = async ({ request }) => {
       }
 
       case 'create': {
-        await graphqlRequest(admin, `
+        const response = await graphqlRequest(admin, `
           mutation CreateProductWithNewMedia($input: ProductInput!, $media: [CreateMediaInput!]) {
             productCreate(input: $input, media: $media) {
               product {
                 id
+                title
+                descriptionHtml
+                vendor
+                media(first: 10) {
+                  nodes {
+                    alt
+                    mediaContentType
+                    preview {
+                      status
+                    }
+                  }
+                }
+                variants(first: 1) {
+                  edges {
+                    node {
+                      id
+                      price
+                    }
+                  }
+                }
+              }
+              userErrors {
+                field
+                message
               }
             }
           }
@@ -103,7 +127,30 @@ export const action = async ({ request }) => {
           input: { title, descriptionHtml: description, vendor },
           media: [{ originalSource: imageURL, alt, mediaContentType: 'IMAGE' }]
         })
-        return json({ success: true, actionType })
+        const product = response.data.productCreate?.product
+        if (product && price) {
+          const priceId = product.variants.edges[0].node.id
+          await graphqlRequest(admin, `
+              mutation UpdateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+                productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                  product {
+                    id
+                  }
+                  productVariants {
+                    price
+                  }
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }
+          `, {
+            productId: product.id,
+            variants: [{ id: priceId, price }]
+          })
+        }
+        return json({ success: true, actionType, product })
       }
 
       case 'edit': {
@@ -116,7 +163,7 @@ export const action = async ({ request }) => {
             }
           }
         `, {
-          input: { id, title, descriptionHtml: description },
+          input: { id, title, descriptionHtml: description, vendor },
           media: [{ originalSource: imageURL, alt, mediaContentType: 'IMAGE' }]
         })
 
