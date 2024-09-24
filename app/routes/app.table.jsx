@@ -1,5 +1,3 @@
-// fix image not loading, and add variants when creating product
-
 import { json } from '@remix-run/node'
 import { useCallback, useEffect, useState } from 'react'
 import { Page, Layout, Card, DataTable, Button, BlockStack, Modal, Form, FormLayout, TextField, DropZone, Thumbnail, Banner, List, Text } from '@shopify/polaris'
@@ -57,7 +55,6 @@ export const action = async ({ request }) => {
     const formData = await request.formData()
     const actionType = formData.get('_action')
     const product = JSON.parse(formData.get('product')|| '')
-    const file = formData.get('file')
 
     if (!product) return ({ success: false, error: 'Product not found', actionType })
     
@@ -70,11 +67,8 @@ export const action = async ({ request }) => {
     const priceId = product.variants?.edges[0]?.node?.id
     const price = product.variants?.edges[0]?.node?.price
 
-    // const url = URL.createObjectURL(file)
-
-    const imageId = product.media?.edges[0]?.node?.id
-    // const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
-    const imageURL = 'https://cdn.shopify.com/s/files/1/0600/8035/7460/files/200_e1df0bb0-c3ea-4978-8c13-ef648cfb92fb.jpg?v=1727094117'
+    // const imageId = product.media?.edges[0]?.node?.id
+    const imageURL = product.media?.edges[0]?.node?.preview?.image?.url
     const alt = `${title}-image-alt`
 
     if (actionType === 'delete') {
@@ -137,7 +131,8 @@ export const action = async ({ request }) => {
           },
           media: [
             {
-              originalSource: imageURL,
+              // originalSource: imageURL,
+              originalSource: "blob:https://queue-menus-berkeley-carriers.trycloudflare.com/d9b7babb-d07f-4a08-8f22-464f73c0ee76",
               alt,
               mediaContentType: "IMAGE"
             }
@@ -179,7 +174,7 @@ export const action = async ({ request }) => {
           }
         )}))
 
-      return json({ success: true, actionType })
+      return json({ success: true, actionType, imageURL })
 
     }
 
@@ -327,9 +322,8 @@ export default function TablePage() {
   
     // Handle actions for add/edit/delete products
     const handleAction = () => {
-      const src = files[0] ? URL.createObjectURL(files[0]) : ''
+      const src = files[0] ? URL.createObjectURL(files[0]) : null
       const formData = new FormData()
-      const blob = new Blob
       try {
         switch (title) {
           case 'add': {
@@ -350,8 +344,7 @@ export default function TablePage() {
 
               formData.append('_action', 'create')
               formData.append('product', product)
-              formData.append('file', files.length > 0 ? files[0] : null)
-              submit(formData ,{ method: 'post' })
+              submit(formData, { method: 'post' })
               break
           }
           case 'edit': {
@@ -369,6 +362,8 @@ export default function TablePage() {
                       ]
                   }
               })
+              formData.append('_action', 'edit')
+              formData.append('product', product)
               submit(
                 {
                   _action: 'edit',
@@ -394,7 +389,6 @@ export default function TablePage() {
         console.log(error)
       } finally {
         onClose()
-        URL.revokeObjectURL(src)
       }
     }
   
