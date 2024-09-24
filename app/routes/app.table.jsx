@@ -17,9 +17,10 @@ const graphqlRequest = async (admin, query, variables) => {
 
 // inital popupulate data // get data from graphql
 export const loader = async ({ request }) => {
-    const { admin } = await authenticate.admin(request)
-    const response = await admin.graphql(`
-    {
+  try {
+    const { admin } = await authenticate.admin(request);
+    const query = `
+      {
         products(first: 10) {
           edges {
             node {
@@ -29,35 +30,37 @@ export const loader = async ({ request }) => {
               vendor
               variants(first: 1) {
                 edges {
-                    node {
-                        id
-                        price
-                    }
+                  node {
+                    id
+                    price
+                  }
                 }
               }
               media(first: 1) {
                 edges {
-                    node {
-                        id
-                        alt
-                        mediaContentType
-                        preview {
-                            image {
-                                url
-                                id
-                            }
-                        }
+                  node {
+                    id
+                    alt
+                    preview {
+                      image {
+                        url
+                      }
                     }
+                  }
                 }
               }
             }
           }
         }
       }
-    `)
-    const responseJson = await response.json()
-    const products = responseJson.data.products.edges.map((edge) => edge.node)
-    return json({ products })
+    `;
+    const responseJson = await graphqlRequest(admin, query);
+    const products = responseJson.data.products.edges.map((edge) => edge.node);
+    return json({ products, success: true });
+  } catch (error) {
+    return json({ error, success: false });
+  }
+
 }
 // create, edit, delete products // post, put, delete products
 export const action = async ({ request }) => {
